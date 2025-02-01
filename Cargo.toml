@@ -6,6 +6,10 @@ description = "Cross-platform DNS & ARP monitoring tool with anomaly detection a
 repository = "https://github.com/{{gh-username}}/{{project-name}}"
 license = "MIT OR Apache-2.0"
 
+[lib]
+name = "sniff"
+crate-type = ["cdylib"]  # Add this line for Python binding
+
 [dependencies]
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -44,6 +48,9 @@ tokio-fs = "0.1"
 
 # CLI Argument Parsing (if you want a command-line interface)
 clap = { version = "4.0", features = ["derive"] }
+
+# Python bindings
+pyo3 = { version = "0.19", features = ["extension-module"] }
 
 [dev-dependencies]
 # Testing framework
