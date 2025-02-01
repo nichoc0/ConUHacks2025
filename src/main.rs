@@ -1,8 +1,11 @@
 // src/main.rs
 mod sniff;
 mod dashboard;
+mod parser;
+// mod llm;
 
 use crossbeam_channel::{unbounded, Receiver};
+use parser::Storage;
 use std::thread;
 use sniff::NetworkEvent;
 use chrono::Local;
@@ -43,12 +46,12 @@ impl NetworkStats {
         println!("\n=== Network Statistics ===");
         println!("Total Packets: {}", self.total_packets);
         println!("Total Bytes: {} ({:.2} MB)", self.total_bytes, self.total_bytes as f64 / 1_000_000.0);
-        
+
         println!("\nProtocol Distribution:");
         for (proto, count) in &self.protocol_counts {
             println!("{}: {} packets", proto, count);
         }
-        
+
         println!("\nTop 5 Sources:");
         let mut sources: Vec<_> = self.unique_sources.iter().collect();
         sources.sort_by(|a, b| b.1.cmp(a.1));
@@ -70,10 +73,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     })?;
 
     println!("CONUHACKS::Starting network capture on interface en0...");
-    println!("Press Ctrl+C to stop and view statistics.\n");
+    println!("Press Ctrl+Z to stop and view statistics.\n");
 
     // Start capture thread
     let capture_thread = thread::spawn(move || {
+        // If linux, wlp0s20f3 interface
         if let Err(e) = sniff::start_sniffing(Some("en0"), tx) {
             eprintln!("Packet capture error: {}", e);
         }
@@ -92,7 +96,7 @@ fn process_events(rx: Receiver<NetworkEvent>, running: Arc<AtomicBool>) {
     let display_interval = Duration::from_secs(1);
 
     // Display header
-    println!("{:<12} {:<8} {:<30} {:<30} {:<10}", 
+    println!("{:<12} {:<8} {:<30} {:<30} {:<10}",
         "Time", "Proto", "Source", "Destination", "Size");
     println!("{}", "=".repeat(92));
 
@@ -124,7 +128,9 @@ fn display_event(event: &NetworkEvent) {
         event.protocol,
         truncate(&event.source, 29),
         truncate(&event.destination, 29),
+
         format!("{} B", event.payload_size)
+
     );
 }
 
