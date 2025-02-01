@@ -4,7 +4,6 @@ use etherparse::{Ethernet2HeaderSlice, EtherType, IpNumber, Ipv4HeaderSlice, Ipv
 use serde::Serialize;
 use std::net::Ipv4Addr;
 use std::time::{SystemTime, UNIX_EPOCH};
-
 #[derive(Debug, Serialize, Clone)]
 pub struct NetworkEvent {
     pub protocol: String,
