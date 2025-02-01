@@ -14,7 +14,9 @@ tokio = { version = "1", features = ["full"] }
 pcap = "0.9"
 
 # Packet Parsing (Ethernet, ARP, IP, UDP/TCP)
-etherparse = "0.13"
+etherparse = "0.15"
+
+chrono = "0.4"
 
 # JSON Serialization (Used for NetworkEvent struct)
 serde = { version = "1.0", features = ["derive"] }
@@ -32,6 +34,7 @@ crossbeam-channel = "0.5"
 # Logging & Debugging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ctrlc = "3.4"
 
 # Web API (for dashboard)
 axum = { version = "0.6", features = ["ws", "json"] }
