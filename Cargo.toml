@@ -2,13 +2,49 @@
 name = "sniff"
 version = "0.1.0"
 edition = "2021"
-description = "{{project-description}}"
+description = "Cross-platform DNS & ARP monitoring tool with anomaly detection and LLM-based analysis"
 repository = "https://github.com/{{gh-username}}/{{project-name}}"
 license = "MIT OR Apache-2.0"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-reqwest = { version = "0.11", features = ["json"] }
+# Async runtime
 tokio = { version = "1", features = ["full"] }
+
+# Packet Capture (Cross-platform support for libpcap/Npcap)
+pcap = "0.9"
+
+# Packet Parsing (Ethernet, ARP, IP, UDP/TCP)
+etherparse = "0.13"
+
+# JSON Serialization (Used for NetworkEvent struct)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# WebSockets (for live dashboard communication)
 tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
+
+# HTTP Requests (for LLM API queries)
+reqwest = { version = "0.11", features = ["json"] }
+
+# Crossbeam Channels (for async packet processing)
+crossbeam-channel = "0.5"
+
+# Logging & Debugging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Web API (for dashboard)
+axum = { version = "0.6", features = ["ws", "json"] }
+
+# File system handling (if needed for logging)
+tokio-fs = "0.1"
+
+# CLI Argument Parsing (if you want a command-line interface)
+clap = { version = "4.0", features = ["derive"] }
+
+[dev-dependencies]
+# Testing framework
+criterion = "0.3"
+
+[profile.release]
+opt-level = 3
