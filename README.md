@@ -1,4 +1,4 @@
-# {{project-name}}
+# sniff
 
 [![Crates.io](https://img.shields.io/crates/v/{{project-name}}.svg)](https://crates.io/crates/{{project-name}})
 [![Docs.rs](https://docs.rs/{{project-name}}/badge.svg)](https://docs.rs/{{project-name}})
@@ -10,7 +10,7 @@
 
 * Install the rust toolchain in order to have cargo installed by following
   [this](https://www.rust-lang.org/tools/install) guide.
-* run `cargo install {{project-name}}`
+* run `cargo install sniff`
 
 ## License
 
