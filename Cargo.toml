@@ -8,9 +8,12 @@ license = "MIT OR Apache-2.0"
 
 [lib]
 name = "sniff"
-crate-type = ["cdylib"]  # Add this line for Python binding
 
 [dependencies]
+reqwest = { version = "0.11", features = ["json", "blocking"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = "0.4"
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
@@ -48,9 +51,6 @@ tokio-fs = "0.1"
 
 # CLI Argument Parsing (if you want a command-line interface)
 clap = { version = "4.0", features = ["derive"] }
-
-# Python bindings
-pyo3 = { version = "0.19", features = ["extension-module"] }
 
 [dev-dependencies]
 # Testing framework
