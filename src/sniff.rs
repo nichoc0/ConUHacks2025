@@ -7,6 +7,7 @@ use std::net::Ipv4Addr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::parser::Storage;
 
+
 #[derive(Debug, Serialize, Clone)]
 pub struct NetworkEvent {
     pub protocol: String,
