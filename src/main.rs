@@ -2,7 +2,7 @@
 mod sniff;
 mod dashboard;
 mod parser;
-// mod llm;
+mod llm;
 
 use crossbeam_channel::{unbounded, Receiver};
 use parser::Storage;
