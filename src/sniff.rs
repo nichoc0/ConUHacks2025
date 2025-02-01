@@ -1,30 +1,30 @@
 // src/sniff.rs
 use pcap::{Capture, Device, Active};
 use crossbeam_channel::Sender;
-use etherparse::{ArpHeader, Ipv4Addr, MacAddr, UdpHeaderSlice, InternetSlice};
-use std::time::Duration;
+use etherparse::{Ethernet2HeaderSlice, InternetSlice, TransportSlice};
+use serde::Serialize;
+use tokio_tungstenite::tungstenite::Message;
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Serialize)]
 pub struct NetworkEvent {
-    pub event_type: String,
+    pub protocol: String,
     pub source: String,
-    pub target: String,
-    pub payload: Vec<u8>,
-    pub anomaly_score: u8,
-    pub explanation: String,
+    pub destination: String,
+    pub payload_size: usize,
 }
 
-const ARP_OPERATION_REPLY: u16 = 2;
 const DNS_PORT: u16 = 53;
 
-pub fn start_sniffing(
-    interface: Option<&str>,
-    sender: Sender<NetworkEvent>,
-) -> Result<(), pcap::Error> {
+pub fn start_sniffing(interface: Option<&str>, sender: Sender<NetworkEvent>) -> Result<(), pcap::Error> {
     let mut cap = create_capture(interface)?;
-    configure_capture(&mut cap)?;
     
-    process_packets(&mut cap, sender)
+    while let Ok(packet) = cap.next_packet() {
+        if let Some(event) = parse_packet(packet) {
+            sender.send(event).unwrap_or_else(|e| eprintln!("Channel error: {}", e));
+        }
+    }
+
+    Ok(())
 }
 
 fn create_capture(interface: Option<&str>) -> Result<Capture<Active>, pcap::Error> {
@@ -35,112 +35,55 @@ fn create_capture(interface: Option<&str>) -> Result<Capture<Active>, pcap::Erro
 
     Capture::from_device(device)?
         .promisc(false)  // Reduce permissions needed
-        .snaplen(2048)   // Optimized for ARP/DNS
+        .snaplen(2048)   // Optimized capture size
         .timeout(500)    // Faster packet processing
-        .immediate_mode(true)  // Better real-time behavior
+        .immediate_mode(true)  // Real-time behavior
         .open()
 }
 
-fn configure_capture(cap: &mut Capture<Active>) -> Result<(), pcap::Error> {
-    cap.filter("arp or port 53", true)?;  // More efficient BPF
-    cap.setnonblock()?;  // Better for cross-platform async
-    Ok(())
-}
+fn parse_packet(packet: pcap::Packet) -> Option<NetworkEvent> {
+    let eth = Ethernet2HeaderSlice::from_slice(packet.data).ok()?;
 
-fn process_packets(cap: &mut Capture<Active>, sender: Sender<NetworkEvent>) -> Result<(), pcap::Error> {
-    while let Ok(packet) = cap.next_packet() {
-        if let Some(event) = analyze_packet(packet) {
-            sender.send(event).unwrap_or_else(|e| 
-                eprintln!("Channel error: {}", e)
-            );
-        }
-    }
-    Ok(())
-}
-
-fn analyze_packet(packet: pcap::Packet) -> Option<NetworkEvent> {
-    let mut event = NetworkEvent {
-        event_type: String::new(),
-        source: String::new(),
-        target: String::new(),
-        payload: packet.data.to_vec(),
-        anomaly_score: 0,
-        explanation: String::new(),
+    let (protocol, source, destination) = match eth.ether_type() {
+        0x0806 => ("ARP".into(), "N/A".into(), "N/A".into()), // ARP does not have IPs
+        0x0800 | 0x86DD => parse_ip_packet(eth.payload())?,
+        _ => return None, // Ignore unknown protocols
     };
 
-    // Layer 2 parsing
-    let eth = etherparse::Ethernet2HeaderSlice::from_slice(packet.data).ok()?;
-    
-    match eth.ether_type() {
-        // ARP Processing
-        [0x08, 0x06] => handle_arp(eth.payload(), &mut event),
-        // IPv4/IPv6 Processing
-        [0x08, 0x00] | [0x86, 0xDD] => handle_ip(eth.payload(), &mut event),
-        _ => return None,
-    }
-
-    (event.anomaly_score > 0).then_some(event)
+    Some(NetworkEvent {
+        protocol,
+        source,
+        destination,
+        payload_size: packet.data.len(),
+    })
 }
 
-fn handle_arp(payload: &[u8], event: &mut NetworkEvent) {
-    let arp = ArpHeader::from_slice(payload).unwrap_or_else(|_| {
-        event.anomaly_score += 10;
-        event.explanation = "Malformed ARP packet".into();
-        return;
-    });
+fn parse_ip_packet(payload: &[u8]) -> Option<(String, String, String)> {
+    let ip = InternetSlice::from_ip_slice(payload).ok()?;
 
-    event.event_type = "ARP".into();
-    event.source = format!(
-        "{}/{}", 
-        MacAddr::from_bytes(&arp.sender_hw_addr),
-        Ipv4Addr::from_bytes(&arp.sender_proto_addr)
-    );
-    event.target = format!(
-        "{}/{}",
-        MacAddr::from_bytes(&arp.target_hw_addr),
-        Ipv4Addr::from_bytes(&arp.target_proto_addr)
-    );
-
-    // ARP Poisoning Detection
-    if arp.operation() == ARP_OPERATION_REPLY {
-        event.anomaly_score += 30;
-        event.explanation = "Unexpected ARP reply detected".into();
-        
-        if arp.sender_proto_addr == arp.target_proto_addr {
-            event.anomaly_score += 50;
-            event.explanation = "Possible ARP spoofing (same IP in sender/target)".into();
-        }
-    }
-}
-
-fn handle_ip(payload: &[u8], event: &mut NetworkEvent) {
-    let ip = InternetSlice::from_ip_slice(payload).unwrap_or_else(|_| {
-        event.anomaly_score += 10;
-        event.explanation = "Malformed IP packet".into();
-        return;
-    });
-
-    let (src_port, dst_port) = match ip {
-        InternetSlice::Ipv4(ipv4, _) => handle_transport(ipv4.payload()),
-        InternetSlice::Ipv6(ipv6, _) => handle_transport(ipv6.payload()),
+    let (protocol, src_port, dst_port) = match ip {
+        InternetSlice::Ipv4(ipv4, _) => parse_transport_layer(ipv4.payload()),
+        InternetSlice::Ipv6(ipv6, _) => parse_transport_layer(ipv6.payload()),
     };
 
-    // DNS Processing
-    if src_port == DNS_PORT || dst_port == DNS_PORT {
-        event.event_type = "DNS".into();
-        event.source = format!("{}:{}", ip.source_addr(), src_port);
-        event.target = format!("{}:{}", ip.destination_addr(), dst_port);
-        
-        // Basic DNS Poisoning Detection
-        if payload.len() > 512 {
-            event.anomaly_score += 30;
-            event.explanation = "Oversized DNS payload".into();
-        }
-    }
+    let source = format!("{}:{}", ip.source_addr(), src_port);
+    let destination = format!("{}:{}", ip.destination_addr(), dst_port);
+
+    Some((protocol, source, destination))
 }
 
-fn handle_transport(payload: &[u8]) -> (u16, u16) {
-    UdpHeaderSlice::from_slice(payload)
-        .map(|udp| (udp.source_port(), udp.destination_port()))
-        .unwrap_or((0, 0))
+fn parse_transport_layer(payload: &[u8]) -> (String, u16, u16) {
+    match TransportSlice::from_slice(payload) {
+        Ok(TransportSlice::Udp(udp)) => {
+            let protocol = if udp.source_port() == DNS_PORT || udp.destination_port() == DNS_PORT {
+                "DNS"
+            } else {
+                "UDP"
+            };
+            (protocol.into(), udp.source_port(), udp.destination_port())
+        }
+        Ok(TransportSlice::Tcp(tcp)) => ("TCP".into(), tcp.source_port(), tcp.destination_port()),
+        Ok(TransportSlice::Icmpv4(_)) | Ok(TransportSlice::Icmpv6(_)) => ("ICMP".into(), 0, 0),
+        _ => ("Unknown".into(), 0, 0),
+    }
 }
