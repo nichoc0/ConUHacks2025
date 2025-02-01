@@ -14,7 +14,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::collections::HashMap;
 
-// Stats structure to track network statistics
 struct NetworkStats {
     total_packets: usize,
     total_bytes: usize,
@@ -66,7 +65,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
 
-    // Set up Ctrl+C handler
     ctrlc::set_handler(move || {
         println!("\nShutting down...");
         r.store(false, Ordering::SeqCst);
@@ -75,7 +73,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("CONUHACKS::Starting network capture on interface en0...");
     println!("Press Ctrl+Z to stop and view statistics.\n");
 
-    // Start capture thread
     let capture_thread = thread::spawn(move || {
         // If linux, wlp0s20f3 interface
         if let Err(e) = sniff::start_sniffing(Some("en0"), tx) {
@@ -83,7 +80,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Process events in main thread
     process_events(rx, running);
 
     capture_thread.join().unwrap();
@@ -97,6 +93,7 @@ fn process_events(rx: Receiver<NetworkEvent>, running: Arc<AtomicBool>) {
 
     // Display header
     println!("{:<12} {:<8} {:<30} {:<30} {:<10}",
+
         "Time", "Proto", "Source", "Destination", "Size");
     println!("{}", "=".repeat(92));
 
@@ -105,7 +102,6 @@ fn process_events(rx: Receiver<NetworkEvent>, running: Arc<AtomicBool>) {
             display_event(&event);
             stats.update(&event);
 
-            // Update display periodically
             if last_display.elapsed() >= display_interval {
                 clear_screen();
                 stats.display();
@@ -116,7 +112,6 @@ fn process_events(rx: Receiver<NetworkEvent>, running: Arc<AtomicBool>) {
         }
     }
 
-    // Display final statistics
     clear_screen();
     stats.display();
 }

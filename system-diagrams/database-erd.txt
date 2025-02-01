@@ -1,0 +1,52 @@
+@startchen
+
+entity "Network Event" as nev {
+  _id : ObjectId <<key>>
+  timestamp : DateTime
+  protocol : String
+  source : String
+  destination : String
+  payload_size : Integer
+  mac_source : String
+  mac_destination : String
+  port_source : Integer
+  port_destination : Integer
+  created_at : DateTime
+}
+
+entity Analysis {
+  _id : ObjectId <<key>>
+  timestamp : DateTime
+  threat_level : String
+  description : Text
+  confidence_score : Float
+  created_at : DateTime
+  event_id : ObjectId <<FK>>
+}
+
+entity "ThreatPattern" as tp {
+  _id : ObjectId <<key>>
+  pattern_type : String
+  source_ips : String <<multi>>
+  destination_ips : String <<multi>>
+  protocols : String <<multi>>
+  frequency : Integer
+  first_seen : DateTime
+  last_seen : DateTime
+}
+
+relationship ANALYZED_IN {
+  analysis_timestamp : DateTime
+}
+
+relationship MATCHES {
+  confidence : Float
+}
+
+nev -N- ANALYZED_IN
+ANALYZED_IN -1- Analysis
+
+nev -N- MATCHES
+MATCHES -N- tp
+
+@endchen

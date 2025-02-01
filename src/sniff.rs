@@ -36,8 +36,8 @@ fn create_capture(interface: Option<&str>) -> Result<Capture<Active>, pcap::Erro
         None => Device::list()?.into_iter().next(),
     }.ok_or_else(|| pcap::Error::InvalidString)?;
 
-    Capture::from_device(device)?
-        .promisc(false)
+    let mut cap = Capture::from_device(device)?
+        .promisc(false)  // Non-promiscuous by default for legal compliance
         .snaplen(2048)
         .immediate_mode(true)
         .open()

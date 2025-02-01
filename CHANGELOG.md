@@ -5,3 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+- Comprehensive architecture diagram showing system components
+- Expanded README with detailed feature list and architecture overview
+- Added knowledge.md with database design standards
+
+### Changed
+- Updated project description to better reflect security focus
+- Improved database ERD to follow Chen notation standards
