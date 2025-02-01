@@ -1,0 +1,27 @@
+@startuml Network Security Monitor
+
+
+' Core Components
+[Packet Sniffer] as sniffer
+note right of sniffer: Non-promiscuous by default\nOptional promiscuous toggle
+[Rust Backend Server] as backend
+[React Frontend] as frontend
+
+' External Services
+cloud "External Services"{
+cloud "LLM API" as llm
+database "Threat Database" as threatdb
+database "MongoDB" as mongodb
+note bottom of mongodb: Local persistence\nSyncs every 30min
+
+}
+
+
+
+sniffer --> backend: Raw packet data
+backend --> mongodb: Cache events\nevery 30min
+backend --> llm: Threat analysis
+backend --> threatdb: Pattern matching
+frontend <-- backend: Event stream
+
+@enduml
