@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::collections::HashMap;
 
+
 struct NetworkStats {
     total_packets: usize,
     total_bytes: usize,

@@ -10,6 +10,7 @@ license = "MIT OR Apache-2.0"
 name = "sniff"
 
 [dependencies]
+actix-web = "4"
 reqwest = { version = "0.11", features = ["json", "blocking"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -42,6 +43,9 @@ tokio-fs = "0.1"
 
 # CLI Argument Parsing (if you want a command-line interface)
 clap = { version = "4.0", features = ["derive"] }
+
+# MultiMap for storage
+multimap = "0.9"
 
 [dev-dependencies]
 # Testing framework
