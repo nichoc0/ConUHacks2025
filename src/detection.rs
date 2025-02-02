@@ -1,10 +1,13 @@
 use mongodb::{bson::doc, Collection};
 use futures::StreamExt;
 use std::error::Error;
+use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::sniff::NetworkEvent;
 
+
 #[derive(Debug)]
+#[derive(Serialize)]
 pub struct SuspiciousActivity {
     pub activity_type: String,
     pub source: String,
@@ -30,7 +33,13 @@ impl TrafficAnalyzer {
         }
     }
 
+    pub async fn store_suspicious_event(&self, activity: SuspiciousActivity) -> Result<(), Box<dyn Error>> {
+        self.suspicious_collection.insert_one(activity).await?;
+        Ok(())
+    }
+
     pub async fn detect_suspicious_traffic(&self) -> Result<Vec<SuspiciousActivity>, Box<dyn Error>> {
+
         let mut suspicious_activities = Vec::new();
 
         // Detect port scanning (many destinations from one source)
@@ -68,7 +77,7 @@ impl TrafficAnalyzer {
         }
         Ok(())
     }
-    
+
 
     async fn detect_large_transfers(&self, suspicious_activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error>> {
         let mut cursor = self.tcp_collection.aggregate([
