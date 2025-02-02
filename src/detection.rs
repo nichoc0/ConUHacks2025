@@ -13,6 +13,10 @@ pub struct SuspiciousActivity {
     pub source: String,
     pub details: String,
     pub timestamp: f64,
+<<<<<<< HEAD
+=======
+    llm: ()
+>>>>>>> ea95057e5c0585f893ff307c2072aa5253f4e7f1
 }
 
 #[derive(Clone)]
@@ -73,6 +77,10 @@ impl TrafficAnalyzer {
                 source: doc.get_str("_id")?.to_string(),
                 details: "High number of distinct destination connections".to_string(),
                 timestamp: get_current_timestamp(),
+<<<<<<< HEAD
+=======
+                llm: llm::run(serialized.clone())  // Convert llm result to String
+>>>>>>> ea95057e5c0585f893ff307c2072aa5253f4e7f1
             });
         }
         Ok(())
@@ -94,6 +102,11 @@ impl TrafficAnalyzer {
                 source: doc.get_str("_id")?.to_string(),
                 details: format!("Transferred {} bytes", doc.get_i64("total_bytes")?),
                 timestamp: get_current_timestamp(),
+<<<<<<< HEAD
+=======
+                llm: llm::run(serialized.clone())
+
+>>>>>>> ea95057e5c0585f893ff307c2072aa5253f4e7f1
             });
         }
         Ok(())
@@ -114,6 +127,10 @@ impl TrafficAnalyzer {
                 source: doc.get_str("_id")?.to_string(),
                 details: format!("High query rate: {} queries", doc.get_i32("query_count")?),
                 timestamp: get_current_timestamp(),
+<<<<<<< HEAD
+=======
+                llm: llm::run(serialized.clone())
+>>>>>>> ea95057e5c0585f893ff307c2072aa5253f4e7f1
             });
         }
         Ok(())
@@ -138,10 +155,91 @@ impl TrafficAnalyzer {
                 source: "Unknown".to_string(),
                 details: format!("Connections to rare port {}", doc.get_i32("_id")?),
                 timestamp: get_current_timestamp(),
+<<<<<<< HEAD
+=======
+                llm: llm::run(serialized.clone())
+
+>>>>>>> ea95057e5c0585f893ff307c2072aa5253f4e7f1
             });
         }
         Ok(())
     }
+<<<<<<< HEAD
+=======
+
+    async fn detect_arp_spoofing(&self, activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let pipeline = vec![
+            doc! { "$group": {
+                "_id": { "$arrayElemAt": [{ "$split": ["$source", " "] }, 2] }, // Extract IP from format "MAC (IP)"
+                "macs": { "$addToSet": { "$arrayElemAt": [{ "$split": ["$source", " "] }, 0] } }
+            }},
+            doc! { "$match": {
+                "$expr": { "$gt": [{ "$size": "$macs" }, ARP_SPOOF_THRESHOLD] }
+            }}
+        ];
+
+        let mut cursor = self.arp_collection.aggregate(pipeline).await?;
+        let serialized = serde_json::to_string(&activities).unwrap_or_default();
+        while let Some(Ok(doc)) = cursor.next().await {
+            let ip = doc.get_str("_id")?;
+            let macs = doc.get_array("macs")?
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            activities.push(SuspiciousActivity {
+                activity_type: "ARP Spoofing".into(),
+                source: ip.into(),
+                details: format!("Multiple MACs ({}) claiming same IP", macs),
+                timestamp: get_current_timestamp(),
+                llm: llm::run(serialized.clone())
+
+            });
+        }
+        Ok(())
+    }
+
+    async fn detect_udp_floods(&self, activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let time_window = get_current_timestamp() - 60.0;
+
+        let pipeline = vec![
+            doc! { "$match": {
+                "timestamp": { "$gte": time_window },
+                "protocol": "UDP"
+            }},
+            doc! { "$group": {
+                "_id": "$source",
+                "packet_count": { "$sum": 1 }
+            }},
+            doc! { "$match": {
+                "packet_count": { "$gt": 1000 }
+            }}
+        ];
+
+        let mut cursor = self.udp_collection.aggregate(pipeline).await?;
+
+        while let Some(Ok(doc)) = cursor.next().await {
+            let source = doc.get_str("_id")?;
+            let count = doc.get_i32("packet_count")?;
+
+            let serialized = serde_json::to_string(&activities).unwrap_or_default();
+            activities.push(SuspiciousActivity {
+                activity_type: "UDP Flood".into(),
+                source: source.into(),
+                details: format!("{} UDP packets in 1 minute", count),
+                timestamp: get_current_timestamp(),
+                llm: llm::run(serialized.clone())
+            });
+        }
+        Ok(())
+    }
+
+    pub async fn store_suspicious_event(&self, activity: SuspiciousActivity) -> Result<(), Box<dyn Error + Send + Sync>> {
+        self.suspicious_collection.insert_one(activity).await?;
+        Ok(())
+    }
+>>>>>>> ea95057e5c0585f893ff307c2072aa5253f4e7f1
 }
 
 fn get_current_timestamp() -> f64 {
