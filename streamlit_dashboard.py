@@ -21,28 +21,16 @@ if 'is_loading' not in st.session_state:
     st.session_state.is_loading = False
 
 @st.cache_resource(show_spinner=False)
-def create_loop():
-    loop = asyncio.new_event_loop()
-    thread = Thread(target=loop.run_forever)
-    thread.start()
-    return loop, thread
+def init_connection():
+    return AsyncIOMotorClient('mongodb://localhost:27017/')
 
-# Create event loop in a separate thread
-st.session_state.event_loop, worker_thread = create_loop()
+try:
+    client = init_connection()
+    db = client.network_monitor
+except Exception as e:
+    st.error(f"Failed to connect to MongoDB: {str(e)}")
+    st.stop()
 
-def run_async(coroutine):
-    return asyncio.run_coroutine_threadsafe(coroutine, st.session_state.event_loop).result()
-
-@st.cache_resource(show_spinner=False)
-def setup_database():
-    client = AsyncIOMotorClient('mongodb://localhost:27017/')
-    db = client['network_monitor']
-    return db
-
-# Initialize MongoDB connection
-db = setup_database()
-
-# Create async functions for MongoDB queries
 async def fetch_events(start_time, end_time):
     events = []
     collections = ['tcp_events', 'udp_events', 'arp_events', 'dns_events']
@@ -64,27 +52,10 @@ async def fetch_suspicious_events(start_time, end_time):
         events.append(doc)
     return events
 
-async def fetch_latest_events(limit_per_collection=25):
-    events = []
-    collections = ['tcp_events', 'udp_events', 'arp_events', 'dns_events']
-    for collection_name in collections:
-        collection = db[collection_name]
-        cursor = collection.find().sort('timestamp', -1).limit(limit_per_collection)
-        async for doc in cursor:
-            events.append(doc)
-    return events
-
-async def fetch_latest_suspicious(limit=100):
-    events = []
-    cursor = db['sus_events'].find().sort('timestamp', -1).limit(limit)
-    async for doc in cursor:
-        events.append(doc)
-    return events
-
 # Event Timeline Section
 st.header('Event Timeline (Last 10 Minutes)')
 
-# Create time bins and empty figure first (skeleton)
+# Create time bins and empty figure
 now = datetime.now()
 ten_mins_ago = now - timedelta(minutes=10)
 bins = pd.date_range(start=ten_mins_ago, end=now, freq='30S')
@@ -131,6 +102,9 @@ with suspicious_container:
     )
 
 async def load_data():
+    if st.session_state.is_loading:
+        return
+
     try:
         st.session_state.is_loading = True
         
@@ -151,29 +125,6 @@ async def load_data():
             df['timestamp'] = df['timestamp'].apply(format_timestamp)
             st.session_state.suspicious_events = df
             
-        # Update timeline
-        if normal_events:
-            normal_df = pd.DataFrame(normal_events)
-            normal_df['datetime'] = pd.to_datetime(normal_df['timestamp'].apply(lambda x: datetime.fromtimestamp(x)))
-            normal_counts = pd.cut(normal_df['datetime'], bins=bins).value_counts().sort_index()
-            fig.add_trace(go.Bar(
-                x=bins[:-1],
-                y=normal_counts.values,
-                name='Normal Events',
-                marker_color='green'
-            ))
-        
-        if suspicious_events:
-            sus_df = pd.DataFrame(suspicious_events)
-            sus_df['datetime'] = pd.to_datetime(sus_df['timestamp'].apply(lambda x: datetime.fromtimestamp(x)))
-            sus_counts = pd.cut(sus_df['datetime'], bins=bins).value_counts().sort_index()
-            fig.add_trace(go.Bar(
-                x=bins[:-1],
-                y=sus_counts.values,
-                name='Suspicious Events',
-                marker_color='red'
-            ))
-            
         return normal_events, suspicious_events
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
@@ -185,12 +136,11 @@ async def load_data():
 if st.session_state.is_loading:
     st.spinner('Loading data...')
 
-# Trigger async data load
-if st.button('Refresh Data') or 'last_refresh' not in st.session_state:
-    st.session_state.last_refresh = time.time()
-    run_async(load_data())
+# Refresh button
+if st.button('Refresh Data'):
+    asyncio.run(load_data())
 
-# Auto-refresh every 5 seconds
-if time.time() - st.session_state.get('last_refresh', 0) > 5:
+# Auto-refresh every 5 seconds if not loading
+if not st.session_state.is_loading and time.time() - st.session_state.get('last_refresh', 0) > 5:
     st.session_state.last_refresh = time.time()
-    run_async(load_data())
+    asyncio.run(load_data())
