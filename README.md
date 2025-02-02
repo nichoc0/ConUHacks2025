@@ -9,7 +9,7 @@ This tool monitors your machine's network traffic (non-promiscuous by default) a
 - Real-time packet analysis
 - AI-powered threat detection
 - Local MongoDB persistence with 30-minute sync intervals
-- Web interface for monitoring
+- Web-based dashboard for monitoring (implemented using Streamlit)
 - Optional promiscuous mode toggle (use responsibly)
 
 ## Architecture
@@ -18,10 +18,10 @@ This tool monitors your machine's network traffic (non-promiscuous by default) a
 
 The system consists of:
 
-- Rust backend with packet capture capabilities
-- React frontend for visualization
+- Rust backend with packet capture capabilities and API endpoints for event retrieval and report generation
+- Python Streamlit dashboard for visualizing events (replacing the previous React frontend)
 - MongoDB for persistent storage
-- Integration with LLM API for threat analysis
+- Integration with an LLM API for threat analysis
 - Connection to threat databases for pattern matching
 
 See `system-diagrams/component-diagram.txt` for detailed architecture visualization.
@@ -32,4 +32,10 @@ By default, this tool only monitors your own machine's traffic (non-promiscuous 
 
 ## Installation & Usage
 
-[Previous installation instructions remain the same...]
+1. Start the Rust backend (which now exposes several API endpoints on port 8080).
+2. Launch the Streamlit dashboard:
+   • Install Streamlit (e.g., `pip install streamlit requests`)
+   • Run the dashboard: `streamlit run streamlit_dashboard.py`
+3. Use the dashboard to view network events and expand each event to see a placeholder report.
+  
+[Additional installation instructions remain the same...]
