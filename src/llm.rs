@@ -1,7 +1,15 @@
 use reqwest::blocking::Client;
+use serde::Serialize;
 use serde_json::json;
 use std::env;
 use dotenv::dotenv;
+
+
+#[derive(Debug, Clone, Serialize)]
+    pub struct LlmInference {
+        pub payload: String,
+        pub response: String,
+    }
 
 pub fn get_inference(input: &String) -> Result<String, reqwest::Error> {
     dotenv().ok();
@@ -32,7 +40,7 @@ pub fn get_inference(input: &String) -> Result<String, reqwest::Error> {
 
 pub fn run(input: String) {
     match get_inference(&input) {
-        Ok(response) => println!("{}", response),
+        Ok(response) => println!("{}", response.to_string()),
         Err(err) => eprintln!("Error: {}", err),
     }
 }
