@@ -1,12 +1,9 @@
-
 use pcap::{Capture, Device, Active};
 use crossbeam_channel::Sender;
 use etherparse::{Ethernet2HeaderSlice, EtherType, IpNumber, Ipv4HeaderSlice, Ipv6HeaderSlice, TcpHeaderSlice, UdpHeaderSlice};
 use serde::Serialize;
 use std::net::Ipv4Addr;
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::parser::Storage;
-
 #[derive(Debug, Serialize, Clone)]
 pub struct NetworkEvent {
     pub protocol: String,
@@ -20,7 +17,7 @@ const DNS_PORT: u16 = 53;
 
 pub fn start_sniffing(interface: Option<&str>, sender: Sender<NetworkEvent>) -> Result<(), pcap::Error> {
     let mut cap = create_capture(interface)?;
-
+    
     while let Ok(packet) = cap.next() {
         if let Some(event) = parse_packet(&packet) {
             sender.send(event).unwrap_or_else(|e| eprintln!("Channel error: {}", e));
@@ -36,8 +33,8 @@ fn create_capture(interface: Option<&str>) -> Result<Capture<Active>, pcap::Erro
         None => Device::list()?.into_iter().next(),
     }.ok_or_else(|| pcap::Error::InvalidString)?;
 
-    let mut cap = Capture::from_device(device)?
-        .promisc(false)  // Non-promiscuous by default for legal compliance
+    Capture::from_device(device)?
+        .promisc(false)
         .snaplen(2048)
         .immediate_mode(true)
         .open()
@@ -67,14 +64,10 @@ fn parse_arp(payload: &[u8]) -> (String, String, String) {
     if payload.len() < 28 {
         return ("ARP (Malformed)".to_string(), "N/A".to_string(), "N/A".to_string());
     }
-    // If the same sender ip but different mac addres  we need to eventually flag the event.
+
     let sender_mac = format_mac(&payload[8..14]);
     let sender_ip = Ipv4Addr::new(payload[14], payload[15], payload[16], payload[17]);
 
-    // Store the data to be parsed later for threat analysis.
-    let mut storage = Storage::new();
-    storage.add(&sender_mac.to_string(), &sender_ip.to_string());
-    
     let target_mac = format_mac(&payload[18..24]);
     let target_ip = Ipv4Addr::new(payload[24], payload[25], payload[26], payload[27]);
 
@@ -89,9 +82,9 @@ fn parse_ipv4(payload: &[u8]) -> Option<(String, String, String)> {
     let ip_header = Ipv4HeaderSlice::from_slice(payload).ok()?;
     let src_ip = ip_header.source_addr();
     let dst_ip = ip_header.destination_addr();
-
+    
     let payload = &payload[ip_header.slice().len()..];
-
+    
     match ip_header.protocol() {
         IpNumber::TCP => parse_tcp(payload, src_ip.to_string(), dst_ip.to_string()),
         IpNumber::UDP => parse_udp(payload, src_ip.to_string(), dst_ip.to_string()),
@@ -104,9 +97,9 @@ fn parse_ipv6(payload: &[u8]) -> Option<(String, String, String)> {
     let ip_header = Ipv6HeaderSlice::from_slice(payload).ok()?;
     let src_ip = ip_header.source_addr();
     let dst_ip = ip_header.destination_addr();
-
+    
     let payload = &payload[ip_header.slice().len()..];
-
+    
     match ip_header.next_header() {
         IpNumber::TCP => parse_tcp(payload, src_ip.to_string(), dst_ip.to_string()),
         IpNumber::UDP => parse_udp(payload, src_ip.to_string(), dst_ip.to_string()),
