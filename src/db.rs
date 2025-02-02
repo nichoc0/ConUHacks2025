@@ -30,6 +30,7 @@ impl NetworkDB {
             sus_collection: db.collection("sus_events"),
         })
     }
+    
 
     pub async fn store_event(&self, event: NetworkEvent) -> Result<(), Box<dyn Error>> {
         let collection = match event.protocol.as_str() {

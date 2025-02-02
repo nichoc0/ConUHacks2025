@@ -2,6 +2,7 @@ mod sniff;
 mod dashboard;
 mod db;
 mod parser;
+mod detection;
 use crossbeam_channel::{unbounded, Receiver};
 use std::thread;
 use sniff::NetworkEvent;
@@ -10,6 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::collections::HashMap;
 use crate::db::NetworkDB;
+use crate::detection::TrafficAnalyzer;
 use tokio::time;
 
 struct NetworkStats {
@@ -39,10 +41,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx, rx) = unbounded();
     let running = Arc::new(AtomicBool::new(true));
     let db = NetworkDB::new().await?;
+    let analyzer = TrafficAnalyzer::new(db.get_database_instance()).await;
     println!("Connected to MongoDB successfully");
 
     let capture_thread = thread::spawn(move || {
-        sniff::start_sniffing(Some("en0"), tx).unwrap();
+        if let Err(e) = sniff::start_sniffing(Some("en0"), tx) {
+            eprintln!("Packet capture error: {}", e);
+        }
     });
 
     let db_clone = db.clone();
@@ -51,7 +56,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut interval = time::interval(Duration::from_secs(60));
         while running_clone.load(Ordering::SeqCst) {
             interval.tick().await;
-            db_clone.refresh_logs().await.unwrap_or_else(|e| eprintln!("Error clearing logs: {}", e));
+            if let Err(e) = db_clone.refresh_logs().await {
+                eprintln!("Error clearing logs: {}", e);
+            }
+        }
+    });
+
+    let analyzer_clone = analyzer.clone();
+    let running_clone = running.clone();
+    tokio::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(30));
+        while running_clone.load(Ordering::SeqCst) {
+            interval.tick().await;
+            match analyzer_clone.detect_suspicious_traffic().await {
+                Ok(suspicious) => {
+                    for activity in suspicious {
+                        println!("Suspicious Activity Detected: {} from {} - {}", activity.activity_type, activity.source, activity.details);
+                        if let Err(e) = analyzer_clone.store_suspicious_event(activity).await {
+                            eprintln!("Error inserting suspicious activity: {}", e);
+                        }
+                    }
+                },
+                Err(e) => eprintln!("Error detecting suspicious traffic: {}", e),
+            }
         }
     });
 
@@ -63,13 +90,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn process_events(rx: Receiver<NetworkEvent>, running: Arc<AtomicBool>, db: NetworkDB) {
     let mut stats = NetworkStats::new();
     while running.load(Ordering::SeqCst) {
-        if let Ok(event) = rx.try_recv() {
-            stats.update(&event);
-            if let Err(e) = db.store_event(event.clone()).await {
-                eprintln!("Error storing event in MongoDB: {}", e);
-            }
-        } else {
-            thread::sleep(Duration::from_millis(100));
+        match rx.try_recv() {
+            Ok(event) => {
+                stats.update(&event);
+                if let Err(e) = db.store_event(event.clone()).await {
+                    eprintln!("Error storing event in MongoDB: {}", e);
+                }
+            },
+            Err(_) => thread::sleep(Duration::from_millis(100)),
         }
     }
 }
