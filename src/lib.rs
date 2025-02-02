@@ -1,5 +1,5 @@
 mod sniff;
-
+pub mod llm; 
 pub use sniff::*;
 
 #[cfg(test)]

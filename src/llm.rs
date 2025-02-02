@@ -2,7 +2,8 @@ use reqwest::blocking::Client;
 use serde_json::json;
 use std::env;
 use dotenv::dotenv;
-ub fn get_inference(input: &str) -> Result<String, reqwest::Error> {
+
+pub fn get_inference(input: &str) -> Result<String, reqwest::Error> {
     dotenv().ok();
     let api_key = env::var("TOGETHER_API_KEY").expect("TOGETHER_API_KEY must be set");
 
