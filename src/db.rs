@@ -1,5 +1,5 @@
 use mongodb::{
-    Client, Collection,
+    Client, Collection, Database,
     options::ClientOptions,
     bson::doc,
 };
@@ -9,6 +9,7 @@ use std::error::Error;
 
 #[derive(Clone)]
 pub struct NetworkDB {
+    database: Database,
     tcp_collection: Collection<NetworkEvent>,
     udp_collection: Collection<NetworkEvent>,
     arp_collection: Collection<NetworkEvent>,
@@ -22,13 +23,21 @@ impl NetworkDB {
         let client = Client::with_options(client_options)?;
         let db = client.database("network_monitor");
 
+
+
         Ok(Self {
+            database: db.clone(),
             tcp_collection: db.collection("tcp_events"),
             udp_collection: db.collection("udp_events"),
             arp_collection: db.collection("arp_events"),
             dns_collection: db.collection("dns_events"),
             sus_collection: db.collection("sus_events"),
         })
+    }
+
+
+    pub fn get_database_instance(&self) -> Database {
+        self.database.clone()
     }
 
     pub async fn store_event(&self, event: NetworkEvent) -> Result<(), Box<dyn Error>> {

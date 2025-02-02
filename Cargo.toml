@@ -54,6 +54,7 @@ clap = { version = "4.0", features = ["derive"] }
 
 # MultiMap for storage
 multimap = "0.9"
+dotenv = "0.15.0"
 
 [dev-dependencies]
 # Testing framework
