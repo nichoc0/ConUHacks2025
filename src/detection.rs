@@ -19,7 +19,7 @@ pub struct SuspiciousActivity {
     pub source: String,
     pub details: String,
     pub timestamp: f64,
-    llm: String
+    llm: ()
 }
 
 #[derive(Clone)]
@@ -93,7 +93,7 @@ impl TrafficAnalyzer {
                 source: source.into(),
                 details: format!("{} unique ports scanned on {}", port_count, dest_ip),
                 timestamp: get_current_timestamp(),
-                llm: llm::run(serialized)  // Convert llm result to String
+                llm: llm::run(serialized.clone())  // Convert llm result to String
             });
         }
         Ok(())
@@ -126,7 +126,7 @@ impl TrafficAnalyzer {
                 source: source.into(),
                 details: format!("{} bytes transferred in 5 minutes", bytes),
                 timestamp: get_current_timestamp(),
-                llm: llm::run(serialized)
+                llm: llm::run(serialized.clone())
 
             });
         }
@@ -163,7 +163,7 @@ impl TrafficAnalyzer {
                 source: source.into(),
                 details: format!("{} DNS queries in 1 minute", count),
                 timestamp: get_current_timestamp(),
-                llm: llm::run(serialized)
+                llm: llm::run(serialized.clone())
             });
         }
         Ok(())
@@ -209,7 +209,7 @@ impl TrafficAnalyzer {
                 source: sources,
                 details: format!("{} connections to port {}", count, port),
                 timestamp: get_current_timestamp(),
-                llm: llm::run(serialized)
+                llm: llm::run(serialized.clone())
 
             });
         }
@@ -242,7 +242,7 @@ impl TrafficAnalyzer {
                 source: ip.into(),
                 details: format!("Multiple MACs ({}) claiming same IP", macs),
                 timestamp: get_current_timestamp(),
-                llm: llm::run(serialized)
+                llm: llm::run(serialized.clone())
 
             });
         }
@@ -278,7 +278,7 @@ impl TrafficAnalyzer {
                 source: source.into(),
                 details: format!("{} UDP packets in 1 minute", count),
                 timestamp: get_current_timestamp(),
-                llm: llm::run(serialized)
+                llm: llm::run(serialized.clone())
             });
         }
         Ok(())
