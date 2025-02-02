@@ -11,8 +11,9 @@ pub fn get_inference(input: &str) -> Result<String, reqwest::Error> {
         .post("https://api.together.xyz/v1/chat/completions")
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&json!({
-            "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",  // This is one of their free models
-            "messages": [{"role": "user", "content": input}],
+            "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+
+            "messages": [{"role": "user", "content": input}, {"role": "system", "content": "You are a threat AI detection model. You are being given suspicious packet data. Give the user context briefly"},],
             "temperature": 0.7,
             "max_tokens": 1024
         }))
