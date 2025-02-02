@@ -33,12 +33,12 @@ impl TrafficAnalyzer {
         }
     }
 
-    pub async fn store_suspicious_event(&self, activity: SuspiciousActivity) -> Result<(), Box<dyn Error>> {
+    pub async fn store_suspicious_event(&self, activity: SuspiciousActivity) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.suspicious_collection.insert_one(activity).await?;
         Ok(())
     }
 
-    pub async fn detect_suspicious_traffic(&self) -> Result<Vec<SuspiciousActivity>, Box<dyn Error>> {
+    pub async fn detect_suspicious_traffic(&self) -> Result<Vec<SuspiciousActivity>, Box<dyn Error + Send + Sync>> {
 
         let mut suspicious_activities = Vec::new();
 
@@ -57,7 +57,7 @@ impl TrafficAnalyzer {
         Ok(suspicious_activities)
     }
 
-    async fn detect_port_scanning(&self, suspicious_activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error>> {
+    async fn detect_port_scanning(&self, suspicious_activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let mut cursor = self.tcp_collection.aggregate([
             doc! { "$group": {
                 "_id": "$source",
@@ -79,7 +79,7 @@ impl TrafficAnalyzer {
     }
 
 
-    async fn detect_large_transfers(&self, suspicious_activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error>> {
+    async fn detect_large_transfers(&self, suspicious_activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let mut cursor = self.tcp_collection.aggregate([
             doc! { "$group": {
                 "_id": "$source",
@@ -99,7 +99,7 @@ impl TrafficAnalyzer {
         Ok(())
     }
 
-    async fn detect_dns_flood(&self, suspicious_activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error>> {
+    async fn detect_dns_flood(&self, suspicious_activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let mut cursor = self.dns_collection.aggregate([
             doc! { "$group": {
                 "_id": "$source",
@@ -119,7 +119,7 @@ impl TrafficAnalyzer {
         Ok(())
     }
 
-    async fn detect_rare_ports(&self, suspicious_activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error>> {
+    async fn detect_rare_ports(&self, suspicious_activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let common_ports = vec![22, 53, 80, 443, 3306];
         let mut cursor = self.tcp_collection.aggregate([
             doc! { "$match": {
