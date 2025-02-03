@@ -4,6 +4,7 @@ use mongodb::{
     bson::doc,
 };
 use crate::sniff::NetworkEvent;
+use crate::llm::LlmInference;
 use futures::StreamExt;
 use std::error::Error;
 
@@ -16,6 +17,7 @@ pub struct NetworkDB {
     dns_collection: Collection<NetworkEvent>,
     sus_collection: Collection<NetworkEvent>,
     dns_mapping: Collection<NetworkEvent>,
+    llm_inference_collection: Collection<LlmInference>,
 }
 
 impl NetworkDB {
@@ -33,7 +35,8 @@ impl NetworkDB {
             arp_collection: db.collection("arp_events"),
             dns_collection: db.collection("dns_events"),
             sus_collection: db.collection("sus_events"),
-            dns_mapping: db.collection("dns_mapping"),
+            dns_mapping: db.collection("dns_mappings"),
+            llm_inference_collection: db.collection("llm_inferences")
         })
     }
 

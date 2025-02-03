@@ -1,21 +1,22 @@
 use mongodb::{bson::{doc, Bson}, Collection};
 use futures::StreamExt;
+use sniff::llm::LlmInference;
 use std::error::Error;
 use serde::Serialize;
 use serde::Deserialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::sniff::NetworkEvent;
 
-const PORT_SCAN_THRESHOLD: i32 = 12; 
-const DNS_FLOOD_THRESHOLD: i32 = 250; 
-const LARGE_TRANSFER_THRESHOLD: i64 = 8_000_000; 
+const PORT_SCAN_THRESHOLD: i32 = 12;
+const DNS_FLOOD_THRESHOLD: i32 = 250;
+const LARGE_TRANSFER_THRESHOLD: i64 = 8_000_000;
 const RARE_PORT_THRESHOLD: i32 = 10;
-const ARP_SPOOF_THRESHOLD: i32 = 2; 
-const UDP_FLOOD_THRESHOLD: i32 = 800; 
-const PORT_SCAN_WINDOW: f64 = 180.0; 
-const LARGE_TRANSFER_WINDOW: f64 = 300.0; 
+const ARP_SPOOF_THRESHOLD: i32 = 2;
+const UDP_FLOOD_THRESHOLD: i32 = 800;
+const PORT_SCAN_WINDOW: f64 = 180.0;
+const LARGE_TRANSFER_WINDOW: f64 = 300.0;
 const DNS_FLOOD_WINDOW: f64 = 60.0;
-const UDP_FLOOD_WINDOW: f64 = 60.0; 
+const UDP_FLOOD_WINDOW: f64 = 60.0;
 #[derive(Debug, Serialize)]
 pub struct SuspiciousActivity {
     pub activity_type: String,
@@ -30,6 +31,8 @@ pub struct TrafficAnalyzer {
     dns_collection: Collection<NetworkEvent>,
     arp_collection: Collection<NetworkEvent>,
     suspicious_collection: Collection<SuspiciousActivity>,
+    dns_mapping: Collection<DnsMapping>
+    llm_inference_collection: Collection<LlmInference>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,12 +62,13 @@ impl TrafficAnalyzer {
             arp_collection: db.collection("arp_events"),
             suspicious_collection: db.collection("sus_events"),
             dns_mapping: db.collection("dns_mappings"),
+            llm_inference_collection: db.collection("llm_inferences"),
         }
     }
 
     pub async fn detect_suspicious_traffic(&self) -> Result<Vec<SuspiciousActivity>, Box<dyn Error + Send + Sync>> {
         let mut suspicious_activities = Vec::new();
-        
+
         self.detect_port_scanning(&mut suspicious_activities).await?;
         self.detect_large_transfers(&mut suspicious_activities).await?;
         self.detect_dns_flood(&mut suspicious_activities).await?;
@@ -77,7 +81,7 @@ impl TrafficAnalyzer {
     }
     async fn detect_suspicious_dns(&self, activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let time_window = get_current_timestamp() - 3600.0; // Look back 1 hour
-        
+
         let pipeline = vec![
             doc! {
                 "$match": {
@@ -127,7 +131,7 @@ impl TrafficAnalyzer {
                         if is_http {
                             // Check for suspicious patterns in DNS queries
                             let risk_level = assess_dns_risk(query);
-                            
+
                             if risk_level != "Low" {
                                 activities.push(SuspiciousActivity {
                                     activity_type: "Suspicious DNS".into(),
@@ -150,6 +154,7 @@ impl TrafficAnalyzer {
 
                                 self.store_dns_mapping(mapping).await?;
                             }
+
                         }
                     }
                 }
@@ -160,35 +165,35 @@ impl TrafficAnalyzer {
     }
     async fn detect_port_scanning(&self, activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let time_window = get_current_timestamp() - PORT_SCAN_WINDOW;
-        
+
         let pipeline = vec![
-            doc! { "$match": { 
+            doc! { "$match": {
                 "timestamp": { "$gte": time_window },
-                "protocol": "TCP" 
+                "protocol": "TCP"
             }},
-            doc! { "$addFields": { 
+            doc! { "$addFields": {
                 "dest_parts": { "$split": ["$destination", ":"] }
             }},
             doc! { "$match": {
-                "dest_parts": { "$size": 2 }  
+                "dest_parts": { "$size": 2 }
             }},
-            doc! { "$addFields": { 
+            doc! { "$addFields": {
                 "dest_ip": { "$arrayElemAt": ["$dest_parts", 0] },
-                "dest_port": { 
-                    "$toInt": { 
-                        "$arrayElemAt": ["$dest_parts", 1] 
+                "dest_port": {
+                    "$toInt": {
+                        "$arrayElemAt": ["$dest_parts", 1]
                     }
                 }
             }},
-            doc! { "$group": { 
-                "_id": { 
-                    "source": "$source", 
+            doc! { "$group": {
+                "_id": {
+                    "source": "$source",
                     "dest_ip": "$dest_ip"
                 },
                 "unique_ports": { "$addToSet": "$dest_port" },
                 "total_attempts": { "$sum": 1 }
             }},
-            doc! { "$match": { 
+            doc! { "$match": {
                 "$expr": { "$gt": [{ "$size": "$unique_ports" }, PORT_SCAN_THRESHOLD] }
             }}
         ];
@@ -219,15 +224,15 @@ impl TrafficAnalyzer {
 
     async fn detect_large_transfers(&self, activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let time_window = get_current_timestamp() - 300.0;
-        
+
         let pipeline = vec![
             doc! { "$match": { "timestamp": { "$gte": time_window } } },
-            doc! { "$group": { 
+            doc! { "$group": {
                 "_id": "$source",
                 "total_bytes": { "$sum": "$payload_size" }
             }},
-            doc! { "$match": { 
-                "total_bytes": { "$gt": LARGE_TRANSFER_THRESHOLD } 
+            doc! { "$match": {
+                "total_bytes": { "$gt": LARGE_TRANSFER_THRESHOLD }
             }}
         ];
 
@@ -249,18 +254,18 @@ impl TrafficAnalyzer {
 
     async fn detect_dns_flood(&self, activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let time_window = get_current_timestamp() - 60.0; // 1 minute
-        
+
         let pipeline = vec![
-            doc! { "$match": { 
+            doc! { "$match": {
                 "timestamp": { "$gte": time_window },
-                "protocol": "DNS" 
+                "protocol": "DNS"
             }},
-            doc! { "$group": { 
+            doc! { "$group": {
                 "_id": "$source",
                 "query_count": { "$sum": 1 }
             }},
-            doc! { "$match": { 
-                "query_count": { "$gt": DNS_FLOOD_THRESHOLD } 
+            doc! { "$match": {
+                "query_count": { "$gt": DNS_FLOOD_THRESHOLD }
             }}
         ];
 
@@ -282,36 +287,36 @@ impl TrafficAnalyzer {
 
     async fn detect_rare_ports(&self, activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let common_ports = vec![
-            20, 21, 22, 23, 25, 53, 80, 110, 143, 443, 465, 587, 993, 995, 
-            1433, 1521, 3306, 3389, 5432, 5900, 5901, 6379, 8080, 8443, 
+            20, 21, 22, 23, 25, 53, 80, 110, 143, 443, 465, 587, 993, 995,
+            1433, 1521, 3306, 3389, 5432, 5900, 5901, 6379, 8080, 8443,
             27017, 27018, 27019,
             2375, 2376,
             6660, 6661, 6662, 6663, 6664, 6665, 6666, 6667, 6668, 6669,
             5060, 5061
         ];
         let common_ports_bson: Vec<Bson> = common_ports.iter().map(|p| Bson::Int32(*p)).collect();
-        
+
         let pipeline = vec![
             doc! { "$match": { "timestamp": { "$gte": get_current_timestamp() - 300.0 } } },
-            doc! { "$addFields": { 
+            doc! { "$addFields": {
                 "dest_parts": { "$split": ["$destination", ":"] }
             }},
             doc! { "$match": {
                 "dest_parts": { "$size": 2 }
             }},
-            doc! { "$addFields": { 
-                "port": { 
-                    "$toInt": { 
-                        "$arrayElemAt": ["$dest_parts", 1] 
+            doc! { "$addFields": {
+                "port": {
+                    "$toInt": {
+                        "$arrayElemAt": ["$dest_parts", 1]
                     }
                 },
                 "dest_ip": { "$arrayElemAt": ["$dest_parts", 0] }
             }},
-            doc! { "$match": { 
+            doc! { "$match": {
                 "port": { "$nin": common_ports_bson },
                 "protocol": "TCP"
             }},
-            doc! { "$group": { 
+            doc! { "$group": {
                 "_id": {
                     "port": "$port",
                     "dest_ip": "$dest_ip"
@@ -319,7 +324,7 @@ impl TrafficAnalyzer {
                 "count": { "$sum": 1 },
                 "sources": { "$addToSet": "$source" }
             }},
-            doc! { "$match": { 
+            doc! { "$match": {
                 "count": { "$gt": RARE_PORT_THRESHOLD }
             }}
         ];
@@ -355,16 +360,16 @@ impl TrafficAnalyzer {
         }
         Ok(())
     }
-    
+
 
     async fn detect_arp_spoofing(&self, activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let pipeline = vec![
-            doc! { "$group": { 
+            doc! { "$group": {
                 "_id": { "$arrayElemAt": [{ "$split": ["$source", " "] }, 2] }, // Extract IP from format "MAC (IP)"
                 "macs": { "$addToSet": { "$arrayElemAt": [{ "$split": ["$source", " "] }, 0] } }
             }},
-            doc! { "$match": { 
-                "$expr": { "$gt": [{ "$size": "$macs" }, ARP_SPOOF_THRESHOLD] } 
+            doc! { "$match": {
+                "$expr": { "$gt": [{ "$size": "$macs" }, ARP_SPOOF_THRESHOLD] }
             }}
         ];
 
@@ -389,24 +394,30 @@ impl TrafficAnalyzer {
     }
     async fn store_dns_mapping(&self, mapping: DnsMapping) -> Result<(), Box<dyn Error + Send + Sync>> {
         // Assuming we've added a new collection for DNS mappings
-        self.db.collection("dns_mappings").insert_one(mapping).await?;
+        self.dns_mapping.insert_one(mapping).await?;
+        Ok(())
+    }
+
+    async fn store_llm_inference(&self, inference: LlmInference) -> Result<(), Box<dyn Error + Send + Sync>> {
+        // Assuming we've added a new collection for DNS mappings
+        self.llm_inference_collection.insert_one(inference).await?;
         Ok(())
     }
 
     async fn detect_udp_floods(&self, activities: &mut Vec<SuspiciousActivity>) -> Result<(), Box<dyn Error + Send + Sync>> {
         let time_window = get_current_timestamp() - 60.0;
-        
+
         let pipeline = vec![
-            doc! { "$match": { 
+            doc! { "$match": {
                 "timestamp": { "$gte": time_window },
-                "protocol": "UDP" 
+                "protocol": "UDP"
             }},
-            doc! { "$group": { 
+            doc! { "$group": {
                 "_id": "$source",
                 "packet_count": { "$sum": 1 }
             }},
-            doc! { "$match": { 
-                "packet_count": { "$gt": 1000 } 
+            doc! { "$match": {
+                "packet_count": { "$gt": 1000 }
             }}
         ];
 
@@ -462,21 +473,21 @@ fn assess_dns_risk(domain: &str) -> String {
         // Length-based patterns
         (domain.len() > 50, "High"),                    // Unusually long domain
         (domain.chars().filter(|c| c.is_digit(10)).count() > 10, "High"),  // Many numbers
-        
+
         // Character pattern checks
         (domain.contains("--"), "Medium"),              // Double hyphens
         (domain.matches('.').count() > 4, "Medium"),    // Many subdomains
-        
+
         // Common legitimate TLDs (inverse check)
-        (!domain.ends_with(".com") && 
-         !domain.ends_with(".org") && 
-         !domain.ends_with(".net") && 
-         !domain.ends_with(".edu") && 
+        (!domain.ends_with(".com") &&
+         !domain.ends_with(".org") &&
+         !domain.ends_with(".net") &&
+         !domain.ends_with(".edu") &&
          !domain.ends_with(".gov"), "Medium"),
-        
+
         // Entropy checks
         (calculate_entropy(domain) > 4.5, "High"),      // High randomness
-        
+
         // Sequence checks
         (has_repeating_patterns(domain), "Medium"),
         (has_keyboard_patterns(domain), "Medium"),
@@ -488,19 +499,19 @@ fn assess_dns_risk(domain: &str) -> String {
             return risk.to_string();
         }
     }
-    
+
     "Low".to_string()
 }
 
 fn calculate_entropy(s: &str) -> f64 {
     let len = s.len() as f64;
     let mut char_counts = std::collections::HashMap::new();
-    
+
     // Count character frequencies
     for c in s.chars() {
         *char_counts.entry(c).or_insert(0) += 1;
     }
-    
+
     // Calculate entropy
     char_counts.values()
         .map(|&count| {
@@ -531,7 +542,7 @@ fn has_keyboard_patterns(s: &str) -> bool {
         "qwer", "asdf", "zxcv", "1234", "4321",
         "qaz", "wsx", "edc", "rfv"
     ];
-    
+
     let lower = s.to_lowercase();
     keyboard_patterns.iter().any(|pattern| lower.contains(pattern))
 }
