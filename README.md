@@ -43,7 +43,7 @@ A privacy-first network security monitoring tool that analyzes your local networ
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/network-security-monitor
+git clone https://github.com/nichoc0/ConUHacks2025.git
 
 # Install Rust dependencies
 cargo build
