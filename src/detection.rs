@@ -1,5 +1,6 @@
 use mongodb::{bson::{doc, Bson}, Collection};
 use futures::StreamExt;
+use sniff::llm::LlmInference;
 use std::error::Error;
 use serde::Serialize;
 use serde::Deserialize;
@@ -31,6 +32,7 @@ pub struct TrafficAnalyzer {
     arp_collection: Collection<NetworkEvent>,
     suspicious_collection: Collection<SuspiciousActivity>,
     dns_mapping: Collection<DnsMapping>
+    llm_inference_collection: Collection<LlmInference>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -60,6 +62,7 @@ impl TrafficAnalyzer {
             arp_collection: db.collection("arp_events"),
             suspicious_collection: db.collection("sus_events"),
             dns_mapping: db.collection("dns_mappings"),
+            llm_inference_collection: db.collection("llm_inferences"),
         }
     }
 
@@ -151,6 +154,7 @@ impl TrafficAnalyzer {
 
                                 self.store_dns_mapping(mapping).await?;
                             }
+
                         }
                     }
                 }
@@ -391,6 +395,12 @@ impl TrafficAnalyzer {
     async fn store_dns_mapping(&self, mapping: DnsMapping) -> Result<(), Box<dyn Error + Send + Sync>> {
         // Assuming we've added a new collection for DNS mappings
         self.dns_mapping.insert_one(mapping).await?;
+        Ok(())
+    }
+
+    async fn store_llm_inference(&self, inference: LlmInference) -> Result<(), Box<dyn Error + Send + Sync>> {
+        // Assuming we've added a new collection for DNS mappings
+        self.llm_inference_collection.insert_one(inference).await?;
         Ok(())
     }
 
