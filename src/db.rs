@@ -15,6 +15,7 @@ pub struct NetworkDB {
     arp_collection: Collection<NetworkEvent>,
     dns_collection: Collection<NetworkEvent>,
     sus_collection: Collection<NetworkEvent>,
+    dns_mapping: Collection<NetworkEvent>,
 }
 
 impl NetworkDB {
@@ -32,6 +33,7 @@ impl NetworkDB {
             arp_collection: db.collection("arp_events"),
             dns_collection: db.collection("dns_events"),
             sus_collection: db.collection("sus_events"),
+            dns_mapping: db.collection("dns_mappings"),
         })
     }
 
