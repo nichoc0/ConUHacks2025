@@ -43,7 +43,7 @@ A privacy-first network security monitoring tool that analyzes your local networ
 
 ```bash
 # Clone the repository
-git clone https://github.com/nichoc0/ConUHacks2025.git
+git clone https://github.com/nichoc0/ConUHacks2025.git CyberOxide
 
 # Install Rust dependencies
 cargo build
