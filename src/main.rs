@@ -99,7 +99,7 @@ async fn process_events(rx: Receiver<NetworkEvent>, running: Arc<AtomicBool>, db
                     eprintln!("Error storing event in MongoDB: {}", e);
                 }
             },
-            Err(_) => thread::sleep(Duration::from_millis(10000000000)),
+            Err(_) => thread::sleep(Duration::from_millis(100)),
         }
     }
 }
