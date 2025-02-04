@@ -1,5 +1,4 @@
-# 🦀 Network Security Monitor
-
+# 🦀 CyberOxide
 <div align="center">
 
 [![Rust](https://img.shields.io/badge/Rust-1.75+-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
